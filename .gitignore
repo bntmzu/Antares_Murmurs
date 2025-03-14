@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Poetry & Pip
+poetry.lock
+pip-log.txt
+pip-delete-this-directory.txt
+
+# FastAPI and configs
+backend/__pycache__/
+backend/*.sqlite3
+backend/.env
+backend/config/settings.py
+
+# API-keys
+.env
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+logs/
+*.log
