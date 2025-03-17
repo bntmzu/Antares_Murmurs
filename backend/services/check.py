@@ -1,11 +1,10 @@
 import asyncio
-from backend.services.simbad_api import fetch_star_from_simbad
+from backend.services.simbad_api import fetch_star_data
 
 async def test():
-    print(await fetch_star_from_simbad("Antares"))
-    print(await fetch_star_from_simbad("Sirius"))
-    print(await fetch_star_from_simbad("Betelgeuse"))
-    print(await fetch_star_from_simbad("NonexistentStar"))
+    result = await fetch_star_data("Antares")
+    print(result)
 
 asyncio.run(test())
+
 

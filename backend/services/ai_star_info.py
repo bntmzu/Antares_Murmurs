@@ -1,6 +1,6 @@
 import openai
 from backend.config.settings import settings
-from backend.services.nasa_api import fetch_star_data
+from backend.services.simbad_api import fetch_star_data
 
 openai.api_key = settings.OPENAI_API_KEY
 
@@ -13,12 +13,12 @@ async def analyze_star_mythology(star_name: str):
     star_data = await fetch_star_data(star_name)
 
     if not star_data:
-        return {"error": "Star data not found in NASA API."}
+        return {"error": "Star data not found in SIMBAD API."}
 
     prompt = f"""
-        You are an expert in astronomy, mythology, and poetic writing. Your task is to create a mystical, 
-        emotionally evocative description of the star "{star_name}" by analyzing its historical 
-        and mythological significance.
+    You are an expert in astronomy, mythology, and poetic writing. Your task is to create a concise yet poetic 
+    and emotionally profound description of the star "{star_name}," 
+    analyzing its historical and mythological significance.
 
          **Structure of the response:**
         - **Mythological meaning**: How different cultures viewed this star (Greek, Babylonian, Egyptian, etc.).
@@ -26,35 +26,26 @@ async def analyze_star_mythology(star_name: str):
          or challenges does this star symbolize?
         - **If the star were a person**: What kind of personality or presence would it have?
 
-         **Example Output:**
-        "Antares is one of the brightest and most enigmatic stars in the night sky. 
-         A red supergiant in the constellation of Scorpius, it shines with a shifting intensity, as if it breathes,
-         pulses, and lives. Its name, derived from Greek, means 'rival of Ares' or 'anti-Mars' due to its deep, 
-         blood-red hue, mirroring the planet Mars. But Antares is more than just a star. 
-         In myths and legends, it symbolizes passion, inner strength, and the inevitability of change. 
-         It is often seen as the heart of Scorpius, a beacon for those who feel deeply, burn from within, 
-         and refuse to be anything but their true selves—even if it means being misunderstood.
-         If Antares were a person, they would be someone who exists at the crossroads of light and shadow, 
-         carrying both power and vulnerability. Someone unforgettable, whose presence lingers long after they’re gone."
+         **Style Guidelines:**
+        - Balance logic and artistic expression (max 3-4 sentences per section).
+        - Avoid overly poetic phrasing, but make it engaging.
+        - Keep the text concise and meaningful.
+        - Do NOT create fake scientific facts—use only the provided data.
 
-         **Important Notes:**
-        - The description should be poetic, immersive, and emotionally deep.
-        - Avoid dry scientific language—make it feel like a legend being told.
-        - Write in an elegant, mystical tone.
-        - Do NOT create fake scientific facts—use only the provided data
-        """
+    """
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
+    client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    response = await client.chat.completions.create(
+        model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=350,
-        temperature=0.75,  # Increase creativity level
-        top_p=1.0,
+        max_tokens=250,
+        temperature=0.6,
+        top_p=0.9,
         frequency_penalty=0.2,
-        presence_penalty=0.4
+        presence_penalty=0.3
     )
 
-    mythology_description = response["choices"][0]["message"]["content"].strip()
+    mythology_description = response.choices[0].message.content.strip()
 
     # Combine real NASA data with AI-generated mythology
     enriched_star_info = {

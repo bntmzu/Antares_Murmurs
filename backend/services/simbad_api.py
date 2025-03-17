@@ -1,19 +1,19 @@
 import aiohttp
-import asyncio
 import logging
 import re
 
 # Enable logging
 logging.basicConfig(level=logging.INFO)
 
-SIMBAD_SCRIPT_URL = "http://simbad.u-strasbg.fr/simbad/sim-script"
-SIMBAD_ID_URL = "http://simbad.u-strasbg.fr/simbad/sim-id"
+SIMBAD_SCRIPT_URL = "https://simbad.u-strasbg.fr/simbad/sim-script"
+SIMBAD_ID_URL = "https://simbad.u-strasbg.fr/simbad/sim-id"
 
-async def query_simbad(star_name: str):
+async def query_simbad(star_name: str) -> dict | None:
     """
-    Asynchronously fetches star data from SIMBAD using sim-script.
-    Parses text response manually.
+    Fetches star data from SIMBAD using sim-script and parses the response.
     """
+    logging.info(f" Sending request to SIMBAD for {star_name}")
+
     script = f"""
     output console=off
     query id {star_name}
@@ -21,127 +21,126 @@ async def query_simbad(star_name: str):
 
     async with aiohttp.ClientSession() as session:
         async with session.post(SIMBAD_SCRIPT_URL, data={"script": script}) as response:
-            if response.status == 200:
-                text = await response.text()
-                return parse_simbad_response(text)
-            else:
-                logging.warning(f"SIMBAD returned status {response.status} for {star_name}")
-                return None
+            logging.info(f"📡 SIMBAD response status: {response.status}")
+            text = await response.text()
+            logging.debug(f"📜 Raw SIMBAD response:\n{text}")
 
-async def query_coordinates(star_name: str):
+            if response.status == 200:
+                parsed_data = parse_simbad_response(text)
+                logging.info(f"✅ Parsed SIMBAD data: {parsed_data}")
+                return parsed_data
+            logging.warning(f"⚠️ SIMBAD returned status {response.status} for {star_name}")
+            return None
+
+async def query_coordinates(star_name: str) -> str | None:
     """
     Fetches coordinates using SIMBAD's sim-id endpoint.
     """
-    params = {
-        "Ident": star_name,
-        "output.format": "ASCII"
-    }
+    logging.info(f"🔎 Fetching coordinates for {star_name} using sim-id API")
+    params = {"Ident": star_name, "output.format": "ASCII"}
 
     async with aiohttp.ClientSession() as session:
         async with session.get(SIMBAD_ID_URL, params=params) as response:
             if response.status == 200:
-                text = await response.text()
-                return extract_coordinates(text)
-            else:
-                logging.warning(f"Failed to fetch coordinates from sim-id for {star_name}")
-                return None
+                return extract_coordinates(await response.text())
+            logging.warning(f"Failed to fetch coordinates from sim-id for {star_name}")
+            return None
 
-def parse_simbad_response(response_text: str):
+def parse_simbad_response(response_text: str) -> dict:
     """
-    Parses the raw SIMBAD text response and extracts relevant data.
+    Parses SIMBAD text response and extracts relevant data.
     """
-    data = {}
+    logging.info("🔍 Parsing SIMBAD response")
 
-    # Extract main identifier
-    main_id_match = re.search(r"typed ident:\s+(.+)", response_text)
-    data["main_id"] = main_id_match.group(1).strip() if main_id_match else "Unknown"
+    parsed_data = {
+        "main_id": extract_value(r"typed ident:\s+(.+)", response_text, default="Unknown"),
+        "coordinates": extract_value(r"coord\s+:\s+([\d\s.-]+)\s+\([\w\s]+\)", response_text),
+        "spectral_type": extract_value(r"Spectral type:\s+([\w.-]+)", response_text),
+        "visual_magnitude": extract_float(r"flux:\s+V \(Vega\)\s+([\d.-]+)", response_text),
+        "parallax": extract_float(r"parallax:\s+([\d.-]+)", response_text),
+    }
 
-    # Extract coordinates
-    coord_match = re.search(r"coord\s+:\s+([\d\s\.\-]+)\s+\([\w\s]+\)", response_text)
-    data["coordinates"] = coord_match.group(1).strip() if coord_match else None
+    logging.info(f"✅ Parsed data: {parsed_data}")
+    return parsed_data
 
-    # Extract spectral type
-    spectral_type_match = re.search(r"Spectral type:\s+([\w\.\-]+)", response_text)
-    data["spectral_type"] = spectral_type_match.group(1).strip() if spectral_type_match else None
+def extract_value(pattern: str, text: str, default: str | None = None) -> str | None:
+    """
+    Extracts a value from text using a regex pattern.
+    """
+    match = re.search(pattern, text)
+    return match.group(1).strip() if match else default
 
-    # Extract visual magnitude (V)
-    magnitude_match = re.search(r"flux:\s+V \(Vega\)\s+([\d\.\-]+)", response_text)
-    data["visual_magnitude"] = float(magnitude_match.group(1).strip()) if magnitude_match else None
+def extract_float(pattern: str, text: str) -> float | None:
+    """
+    Extracts a float value from text using a regex pattern.
+    """
+    value = extract_value(pattern, text)
+    return float(value) if value else None
 
-    # Extract parallax
-    parallax_match = re.search(r"parallax:\s+([\d\.\-]+)", response_text)
-    data["parallax"] = float(parallax_match.group(1).strip()) if parallax_match else None
-
-    return data
-
-def extract_coordinates(response_text: str):
+def extract_coordinates(response_text: str) -> str | None:
     """
     Extracts coordinates from SIMBAD's sim-id ASCII response.
     """
-    match = re.search(r"(\d{2} \d{2} \d{2}\.\d+)\s+([\+\-]\d{2} \d{2} \d{2}\.\d+)", response_text)
-    return f"{match.group(1)} {match.group(2)}" if match else None
+    return extract_value(r"(\d{2} \d{2} \d{2}\.\d+)\s+([\+\-]\d{2} \d{2} \d{2}\.\d+)", response_text)
 
-async def resolve_star_name(star_name: str):
+async def resolve_star_name(star_name: str) -> str:
     """
     Resolves the official star name from SIMBAD.
     """
+    logging.info(f"🔄 Resolving star name for {star_name}")
+
     data = await query_simbad(star_name)
-
-    if not data or data["main_id"] == "Unknown":
-        logging.error(f"No data found for {star_name}")
-        return star_name
-
-    resolved_name = data["main_id"]
+    resolved_name = data["main_id"] if data and data["main_id"] != "Unknown" else star_name
     logging.info(f"Resolved {star_name} to {resolved_name}")
     return resolved_name
 
-async def fetch_star_data(star_name: str):
+logging.info("🚀 Запуск get_star_info()")
+
+async def fetch_star_data(star_name: str) -> dict:
     """
-    Asynchronously fetches detailed star data from SIMBAD.
+    Fetches detailed star data from SIMBAD.
     """
+    logging.info(f"🌠 Fetching data for {star_name}")
+    print(f"🔎 Fetching star data for {star_name}")
+
     resolved_name = await resolve_star_name(star_name)
     data = await query_simbad(resolved_name)
 
     if not data:
+        logging.error(f"❌ No data found for {resolved_name}")
         return {"error": f"Star '{resolved_name}' not found in SIMBAD."}
 
-    # Fetch coordinates if missing
     if not data.get("coordinates"):
         logging.warning(f"Coordinates missing for {resolved_name}, trying alternative query.")
-        alternative_coords = await query_coordinates(resolved_name)
-        data["coordinates"] = alternative_coords
+        data["coordinates"] = await query_coordinates(resolved_name)
 
-    # Estimate temperature
-    spectral_type = data.get("spectral_type")
-    estimated_temp = estimate_temperature_from_spectral_type(spectral_type) if spectral_type else None
+    data["estimated_temperature"] = estimate_temperature_from_spectral_type(data.get("spectral_type"))
 
-    # Final star information object
-    star_info = {
+    return {
         "name": resolved_name,
         "coordinates": data.get("coordinates"),
-        "spectral_type": spectral_type,
+        "spectral_type": data.get("spectral_type"),
         "visual_magnitude": data.get("visual_magnitude"),
         "parallax": data.get("parallax"),
-        "estimated_temperature": estimated_temp,
+        "estimated_temperature": data["estimated_temperature"],
     }
 
-    return star_info
+# Global spectral temperature mapping
+SPECTRAL_TEMPERATURES = {
+    "O": (30000, 50000),
+    "B": (10000, 30000),
+    "A": (7500, 10000),
+    "F": (6000, 7500),
+    "G": (5200, 6000),
+    "K": (3700, 5200),
+    "M": (2500, 3700),
+}
 
-def estimate_temperature_from_spectral_type(spectral_type: str):
+def estimate_temperature_from_spectral_type(spectral_type: str | None) -> int | None:
     """
     Estimates star temperature based on spectral classification.
     Supports ranges like "M1-M2Ia-Iab".
     """
-    spectral_temperatures = {
-        "O": (30000, 50000),
-        "B": (10000, 30000),
-        "A": (7500, 10000),
-        "F": (6000, 7500),
-        "G": (5200, 6000),
-        "K": (3700, 5200),
-        "M": (2500, 3700),
-    }
-
     if not spectral_type:
         return None
 
@@ -155,10 +154,12 @@ def estimate_temperature_from_spectral_type(spectral_type: str):
     base_class = spectral_type[0]
     subclass = spectral_type[1] if len(spectral_type) > 1 and spectral_type[1].isdigit() else "5"
 
-    if base_class in spectral_temperatures:
-        temp_min, temp_max = spectral_temperatures[base_class]
+    if base_class in SPECTRAL_TEMPERATURES:
+        temp_min, temp_max = SPECTRAL_TEMPERATURES[base_class]
         subclass_fraction = int(subclass) / 9
-        return int(temp_min + (temp_max - temp_min) * (1 - subclass_fraction))
+        estimated_temp = int(temp_min + (temp_max - temp_min) * (1 - subclass_fraction))
+        return estimated_temp
 
     return None
+
 
