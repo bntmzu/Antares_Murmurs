@@ -5,127 +5,11 @@ import re
 # Enable logging
 logging.basicConfig(level=logging.INFO)
 
+# SIMBAD API URLs
 SIMBAD_SCRIPT_URL = "https://simbad.u-strasbg.fr/simbad/sim-script"
 SIMBAD_ID_URL = "https://simbad.u-strasbg.fr/simbad/sim-id"
 
-async def query_simbad(star_name: str) -> dict | None:
-    """
-    Fetches star data from SIMBAD using sim-script and parses the response.
-    """
-    logging.info(f" Sending request to SIMBAD for {star_name}")
-
-    script = f"""
-    output console=off
-    query id {star_name}
-    """
-
-    async with aiohttp.ClientSession() as session:
-        async with session.post(SIMBAD_SCRIPT_URL, data={"script": script}) as response:
-            logging.info(f"📡 SIMBAD response status: {response.status}")
-            text = await response.text()
-            logging.debug(f"📜 Raw SIMBAD response:\n{text}")
-
-            if response.status == 200:
-                parsed_data = parse_simbad_response(text)
-                logging.info(f"✅ Parsed SIMBAD data: {parsed_data}")
-                return parsed_data
-            logging.warning(f"⚠️ SIMBAD returned status {response.status} for {star_name}")
-            return None
-
-async def query_coordinates(star_name: str) -> str | None:
-    """
-    Fetches coordinates using SIMBAD's sim-id endpoint.
-    """
-    logging.info(f"🔎 Fetching coordinates for {star_name} using sim-id API")
-    params = {"Ident": star_name, "output.format": "ASCII"}
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(SIMBAD_ID_URL, params=params) as response:
-            if response.status == 200:
-                return extract_coordinates(await response.text())
-            logging.warning(f"Failed to fetch coordinates from sim-id for {star_name}")
-            return None
-
-def parse_simbad_response(response_text: str) -> dict:
-    """
-    Parses SIMBAD text response and extracts relevant data.
-    """
-    logging.info("🔍 Parsing SIMBAD response")
-
-    parsed_data = {
-        "main_id": extract_value(r"typed ident:\s+(.+)", response_text, default="Unknown"),
-        "coordinates": extract_value(r"coord\s+:\s+([\d\s.-]+)\s+\([\w\s]+\)", response_text),
-        "spectral_type": extract_value(r"Spectral type:\s+([\w.-]+)", response_text),
-        "visual_magnitude": extract_float(r"flux:\s+V \(Vega\)\s+([\d.-]+)", response_text),
-        "parallax": extract_float(r"parallax:\s+([\d.-]+)", response_text),
-    }
-
-    logging.info(f"✅ Parsed data: {parsed_data}")
-    return parsed_data
-
-def extract_value(pattern: str, text: str, default: str | None = None) -> str | None:
-    """
-    Extracts a value from text using a regex pattern.
-    """
-    match = re.search(pattern, text)
-    return match.group(1).strip() if match else default
-
-def extract_float(pattern: str, text: str) -> float | None:
-    """
-    Extracts a float value from text using a regex pattern.
-    """
-    value = extract_value(pattern, text)
-    return float(value) if value else None
-
-def extract_coordinates(response_text: str) -> str | None:
-    """
-    Extracts coordinates from SIMBAD's sim-id ASCII response.
-    """
-    return extract_value(r"(\d{2} \d{2} \d{2}\.\d+)\s+([\+\-]\d{2} \d{2} \d{2}\.\d+)", response_text)
-
-async def resolve_star_name(star_name: str) -> str:
-    """
-    Resolves the official star name from SIMBAD.
-    """
-    logging.info(f"🔄 Resolving star name for {star_name}")
-
-    data = await query_simbad(star_name)
-    resolved_name = data["main_id"] if data and data["main_id"] != "Unknown" else star_name
-    logging.info(f"Resolved {star_name} to {resolved_name}")
-    return resolved_name
-
-logging.info("🚀 Запуск get_star_info()")
-
-async def fetch_star_data(star_name: str) -> dict:
-    """
-    Fetches detailed star data from SIMBAD.
-    """
-    logging.info(f"🌠 Fetching data for {star_name}")
-    print(f"🔎 Fetching star data for {star_name}")
-
-    resolved_name = await resolve_star_name(star_name)
-    data = await query_simbad(resolved_name)
-
-    if not data:
-        logging.error(f"❌ No data found for {resolved_name}")
-        return {"error": f"Star '{resolved_name}' not found in SIMBAD."}
-
-    if not data.get("coordinates"):
-        logging.warning(f"Coordinates missing for {resolved_name}, trying alternative query.")
-        data["coordinates"] = await query_coordinates(resolved_name)
-
-    data["estimated_temperature"] = estimate_temperature_from_spectral_type(data.get("spectral_type"))
-
-    return {
-        "name": resolved_name,
-        "coordinates": data.get("coordinates"),
-        "spectral_type": data.get("spectral_type"),
-        "visual_magnitude": data.get("visual_magnitude"),
-        "parallax": data.get("parallax"),
-        "estimated_temperature": data["estimated_temperature"],
-    }
-
-# Global spectral temperature mapping
+# Spectral class temperature mapping
 SPECTRAL_TEMPERATURES = {
     "O": (30000, 50000),
     "B": (10000, 30000),
@@ -136,30 +20,119 @@ SPECTRAL_TEMPERATURES = {
     "M": (2500, 3700),
 }
 
-def estimate_temperature_from_spectral_type(spectral_type: str | None) -> int | None:
+# Spectral class color mapping
+SPECTRAL_COLORS = {
+    "O": "Blue",
+    "B": "Blue-white",
+    "A": "White",
+    "F": "Yellow-white",
+    "G": "Yellow",
+    "K": "Orange",
+    "M": "Red",
+}
+
+# Luminosity class descriptions
+LUMINOSITY_ESTIMATES = {
+    "Ia": "Hypergiant",
+    "Iab": "Bright supergiant",
+    "Ib": "Supergiant",
+    "II": "Bright giant",
+    "III": "Giant",
+    "IV": "Subgiant",
+    "V": "Main sequence",
+    "VI": "Subdwarf",
+    "VII": "White dwarf",
+}
+
+async def query_simbad(star_name: str) -> dict | None:
     """
-    Estimates star temperature based on spectral classification.
-    Supports ranges like "M1-M2Ia-Iab".
+    Fetches star data from SIMBAD using sim-script and parses the response.
     """
+    logging.info(f"Sending request to SIMBAD for {star_name}")
+    script = f"""
+    output console=off
+    query id {star_name}
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.post(SIMBAD_SCRIPT_URL, data={"script": script}) as response:
+            logging.info(f"SIMBAD response status: {response.status}")
+            text = await response.text()
+            if response.status == 200:
+                return parse_simbad_response(text)
+            logging.warning(f"SIMBAD returned status {response.status} for {star_name}")
+            return None
+
+def parse_simbad_response(response_text: str) -> dict:
+    """
+    Parses SIMBAD text response and extracts relevant data.
+    """
+    return {
+        "main_id": extract_value(r"typed ident:\s+(.+)", response_text, default="Unknown"),
+        "coordinates": extract_value(r"coord\s+:\s+([\d\s.-]+)\s+\([\w\s]+\)", response_text),
+        "spectral_type": extract_value(r"Spectral type:\s+([\w.-]+)", response_text),
+        "visual_magnitude": extract_float(r"flux:\s+V \(Vega\)\s+([\d.-]+)", response_text),
+        "parallax": extract_float(r"parallax:\s+([\d.-]+)", response_text),
+    }
+
+def extract_value(pattern: str, text: str, default: str | None = None) -> str | None:
+    match = re.search(pattern, text)
+    return match.group(1).strip() if match else default
+
+def extract_float(pattern: str, text: str) -> float | None:
+    value = extract_value(pattern, text)
+    return float(value) if value else None
+
+def parse_spectral_type(spectral_type: str | None):
+    """Extracts base class, subclass, and luminosity class from spectral type."""
     if not spectral_type:
+        return None, None, None
+    match = re.match(r"([OBAFGKM])([\d.]+)?(Iab|Ia|Ib|II|III|IV|V|VI|VII)?", spectral_type)
+    if not match:
+        return None, None, None
+    base_class = match.group(1)
+    subclass = float(match.group(2)) if match.group(2) else 5
+    luminosity_class = match.group(3) if match.group(3) else "V"
+    return base_class, subclass, luminosity_class
+
+def estimate_temperature_from_spectral_type(spectral_type: str | None) -> int | None:
+    base_class, subclass, _ = parse_spectral_type(spectral_type)
+    if not base_class:
         return None
+    temp_min, temp_max = SPECTRAL_TEMPERATURES.get(base_class, (None, None))
+    if temp_min is None:
+        return None
+    return int(temp_min + (temp_max - temp_min) * (1 - subclass / 9))
 
-    if "-" in spectral_type:
-        base_classes = re.findall(r"[OBAFGKM]\d?", spectral_type)
-        if len(base_classes) == 2:
-            temp1 = estimate_temperature_from_spectral_type(base_classes[0])
-            temp2 = estimate_temperature_from_spectral_type(base_classes[1])
-            return (temp1 + temp2) // 2 if temp1 and temp2 else None
+def determine_star_color(spectral_type: str | None) -> str | None:
+    base_class, _, _ = parse_spectral_type(spectral_type)
+    return SPECTRAL_COLORS.get(base_class, "Unknown")
 
-    base_class = spectral_type[0]
-    subclass = spectral_type[1] if len(spectral_type) > 1 and spectral_type[1].isdigit() else "5"
+def estimate_luminosity_class(spectral_type: str | None) -> str | None:
+    _, _, luminosity_class = parse_spectral_type(spectral_type)
+    return LUMINOSITY_ESTIMATES.get(luminosity_class, "Unknown")
 
-    if base_class in SPECTRAL_TEMPERATURES:
-        temp_min, temp_max = SPECTRAL_TEMPERATURES[base_class]
-        subclass_fraction = int(subclass) / 9
-        estimated_temp = int(temp_min + (temp_max - temp_min) * (1 - subclass_fraction))
-        return estimated_temp
+def calculate_distance(parallax: float | None) -> float | None:
+    if parallax is None or parallax <= 0:
+        return None
+    return round((1000 / parallax) * 3.26156, 2)
 
-    return None
-
+async def fetch_star_data(star_name: str) -> dict:
+    """
+    Fetches detailed star data from SIMBAD.
+    """
+    logging.info(f"Fetching data for {star_name}")
+    data = await query_simbad(star_name)
+    if not data:
+        return {"error": f"Star '{star_name}' not found in SIMBAD."}
+    return {
+        "name": data["main_id"],
+        "coordinates": data.get("coordinates"),
+        "spectral_type": data.get("spectral_type"),
+        "visual_magnitude": data.get("visual_magnitude"),
+        "parallax": data.get("parallax"),
+        "estimated_temperature": estimate_temperature_from_spectral_type(data.get("spectral_type")),
+        "color": determine_star_color(data.get("spectral_type")),
+        "luminosity_class": estimate_luminosity_class(data.get("spectral_type")),
+        "distance_light_years": calculate_distance(data.get("parallax")),
+    }
 
