@@ -1,8 +1,11 @@
 import openai
+import logging
+import json
 from backend.config.settings import settings
+from backend.services.redis_client import redis_client
 
 openai.api_key = settings.OPENAI_API_KEY
-
+logger = logging.getLogger(__name__)
 
 async def analyze_star_mythology(star_name: str, star_data: dict):
     """
@@ -11,6 +14,13 @@ async def analyze_star_mythology(star_name: str, star_data: dict):
 
     if not star_data:
         return {"error": "Star data not found in SIMBAD API."}
+
+    cache_key = f"mythology:{star_name}"
+    cached_data = await redis_client.get(cache_key)
+
+    if cached_data:
+        logger.info(f"Cache hit for mythology of {star_name}")
+        return json.loads(cached_data)
 
     prompt = f"""
     You are an expert in astronomy, mythology, and poetic writing. Your task is to create a concise yet poetic 
@@ -73,5 +83,10 @@ async def analyze_star_mythology(star_name: str, star_data: dict):
         return mythology
 
     formatted_mythology = format_mythology_response(mythology_description)
+
+    # Cache the response for 1 year (365 days)
+    await redis_client.set(cache_key, json.dumps({**star_data, "mythology": formatted_mythology}), expire=31536000)
+
+    logger.info(f" Mythology for {star_name} cached for 1 year")
 
     return {**star_data, "mythology": formatted_mythology}

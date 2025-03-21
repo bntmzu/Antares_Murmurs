@@ -1,6 +1,11 @@
 import aiohttp
 import logging
 import re
+import json
+from backend.config.database import get_session
+from backend.models.star import Star
+from backend.services.redis_client import redis_client
+from sqlalchemy.future import select
 
 # Enable logging
 logging.basicConfig(level=logging.INFO)
@@ -116,15 +121,40 @@ def calculate_distance(parallax: float | None) -> float | None:
         return None
     return round((1000 / parallax) * 3.26156, 2)
 
+def is_valid_star(star_data: dict) -> bool:
+    spectral_type = star_data.get("spectral_type", "")
+    magnitude = star_data.get("visual_magnitude")
+    parallax = star_data.get("parallax")
+
+    base_class, _, _ = parse_spectral_type(spectral_type)
+
+    # Filters
+    if base_class not in ["O", "B", "A", "F", "G", "K", "M"]:
+        return False
+    if magnitude is None or magnitude > 7:
+        return False
+    if parallax is None or parallax <= 0:
+        return False
+
+    return True
+
 async def fetch_star_data(star_name: str) -> dict:
     """
-    Fetches detailed star data from SIMBAD.
+    Fetches detailed star data from SIMBAD, caches it in Redis, and stores in PostgreSQL if valid.
     """
+    # Check Redis cache first
+    cached_data = await redis_client.get(f"star:{star_name}")
+    if cached_data:
+        logging.info(f"✅ Returning cached data for {star_name}")
+        return json.loads(cached_data)
+
     logging.info(f"Fetching data for {star_name}")
     data = await query_simbad(star_name)
     if not data:
         return {"error": f"Star '{star_name}' not found in SIMBAD."}
-    return {
+
+    # Process data
+    star_data = {
         "name": data["main_id"],
         "coordinates": data.get("coordinates"),
         "spectral_type": data.get("spectral_type"),
@@ -136,3 +166,18 @@ async def fetch_star_data(star_name: str) -> dict:
         "distance_light_years": calculate_distance(data.get("parallax")),
     }
 
+    # Save to Redis cache
+    await redis_client.set(f"star:{star_name}", json.dumps(star_data), ex=2592000)  # Cache for month
+
+    # Store in PostgreSQL
+    async with get_session() as session:
+        existing_star = await session.execute(select(Star).where(Star.name == star_name))
+        existing_star = existing_star.scalars().first()
+
+        if not existing_star:
+            new_star = Star(**star_data)
+            session.add(new_star)
+            await session.commit()
+            logging.info(f"✅ Star {star_name} added to database.")
+
+    return star_data
