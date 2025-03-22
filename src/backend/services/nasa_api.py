@@ -1,6 +1,6 @@
 import httpx
-from backend.config.settings import settings
-from backend.services.star_constellation import get_star_constellation
+from src.backend.config.settings import settings
+from src.backend.services.star_constellation import get_star_constellation
 
 NASA_API_KEY = settings.NASA_API_KEY
 NASA_CATALOG_URL = "https://exoplanetarchive.ipac.caltech.edu/cgi-bin/nstedAPI/nph-nstedAPI"

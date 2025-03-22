@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import relationship, DeclarativeBase
-from backend.models.emotions import star_emotions_association
+from src.backend.models.emotions import star_emotions_association
 
 class Base(AsyncAttrs, DeclarativeBase):
     """Base class for all SQLAlchemy models (with async support)."""

@@ -1,6 +1,6 @@
 import openai
 import httpx
-from backend.config.settings import settings
+from src.backend.config.settings import settings
 
 openai.api_key = settings.OPENAI_API_KEY
 

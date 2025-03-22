@@ -1,8 +1,8 @@
 import openai
 import logging
 import json
-from backend.config.settings import settings
-from backend.services.redis_client import redis_client
+from src.backend.config.settings import settings
+from src.backend.services.redis_client import redis_client
 
 openai.api_key = settings.OPENAI_API_KEY
 logger = logging.getLogger(__name__)

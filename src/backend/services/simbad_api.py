@@ -2,9 +2,9 @@ import aiohttp
 import logging
 import re
 import json
-from backend.config.database import get_session
-from backend.models.star import Star
-from backend.services.redis_client import redis_client
+from src.backend.config.database import get_session
+from src.backend.models.star import Star
+from src.backend.services.redis_client import redis_client
 from sqlalchemy.future import select
 
 # Enable logging

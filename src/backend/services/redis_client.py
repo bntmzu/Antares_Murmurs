@@ -1,6 +1,6 @@
 import aioredis
 import logging
-from backend.config.settings import settings
+from src.backend.config.settings import settings
 
 logger = logging.getLogger(__name__)
 

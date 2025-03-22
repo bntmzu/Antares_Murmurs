@@ -15,10 +15,10 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # FastAPI and configs
-backend/__pycache__/
+src/backend/__pycache__/
 backend/*.sqlite3
-backend/.env
-backend/config/settings.py
+src/backend/.env
+src/backend/config/settings.py
 
 # API-keys
 .env

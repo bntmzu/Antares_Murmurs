@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from backend.routes import api
-from backend.services.redis_client import redis_client
+from src.backend.routes import api
+from src.backend.services.redis_client import redis_client
 import logging
 
 # Configure logging

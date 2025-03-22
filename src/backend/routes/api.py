@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from backend.services.simbad_api import fetch_star_data
-from backend.services.ai_star_info import analyze_star_mythology
+from src.backend.services.simbad_api import fetch_star_data
+from src.backend.services.ai_star_info import analyze_star_mythology
 import logging
 
 
