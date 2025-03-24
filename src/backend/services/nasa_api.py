@@ -3,14 +3,20 @@ from src.backend.config.settings import settings
 from src.backend.services.star_constellation import get_star_constellation
 
 NASA_API_KEY = settings.NASA_API_KEY
-NASA_CATALOG_URL = "https://exoplanetarchive.ipac.caltech.edu/cgi-bin/nstedAPI/nph-nstedAPI"
+NASA_CATALOG_URL = (
+    "https://exoplanetarchive.ipac.caltech.edu/cgi-bin/nstedAPI/nph-nstedAPI"
+)
+
 
 async def fetch_star_data(star_name: str):
     """
     Fetches star data from NASA's Exoplanet Archive and enriches it with constellation information.
     """
     async with httpx.AsyncClient() as client:
-        response = await client.get(NASA_CATALOG_URL, params={"api_key": NASA_API_KEY, "table": "exoplanets", "format": "json"})
+        response = await client.get(
+            NASA_CATALOG_URL,
+            params={"api_key": NASA_API_KEY, "table": "exoplanets", "format": "json"},
+        )
         if response.status_code != 200:
             return None
 
@@ -27,4 +33,3 @@ async def fetch_star_data(star_name: str):
                     "constellation": constellation,
                 }
         return None
-

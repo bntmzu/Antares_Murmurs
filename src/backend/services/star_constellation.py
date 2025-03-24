@@ -33,7 +33,7 @@ async def get_constellation_with_ai(star_name: str):
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=20,
-        temperature=0.5
+        temperature=0.5,
     )
 
     return response["choices"][0]["message"]["content"].strip()

@@ -4,6 +4,7 @@ from src.backend.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+
 class RedisClient:
     def __init__(self):
         self.redis = None
@@ -33,6 +34,7 @@ class RedisClient:
         if self.redis:
             await self.redis.close()
             logger.info(" Redis connection closed")
+
 
 # Singleton instance
 redis_client = RedisClient()

@@ -5,8 +5,11 @@ from src.backend.services.redis_client import redis_client
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logging.info("Logging enabled")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,12 +28,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.error(f"❌ Redis shutdown error: {e}")
 
+
 app = FastAPI(title="Antares Murmurs", lifespan=lifespan)
 app.include_router(api.router)
 
 # Log available routes
 for route in app.routes:
     logging.info(f" Available route: {getattr(route, 'path', 'Unknown')}")
+
 
 @app.get("/")
 async def root():

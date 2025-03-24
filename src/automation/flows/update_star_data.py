@@ -8,6 +8,8 @@ from src.automation.logging import get_prefect_logger
 
 logger = get_prefect_logger()
 
+DATA_CACHE_TTL = 7776000  # 3 months
+
 
 @task
 async def get_stars_from_db():
@@ -37,7 +39,7 @@ async def update_star_in_db(star_name: str):
         await session.commit()
 
     # Updating Redis cache
-    await redis_client.setex(f"star:{star_name}", 7776000, star_data)
+    await redis_client.setex(f"star:{star_name}", DATA_CACHE_TTL, star_data)
     logger.info(f"Data for {star_name} updated successfully")
 
 
@@ -52,5 +54,3 @@ async def update_star_data():
 
     tasks = [update_star_in_db(star) for star in stars]
     await asyncio.gather(*tasks)
-
-

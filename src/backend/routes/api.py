@@ -6,6 +6,7 @@ import logging
 
 router = APIRouter()
 
+
 @router.get("/star_info/")
 async def get_star_info(star_name: str):
     """

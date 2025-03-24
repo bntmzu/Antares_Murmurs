@@ -24,7 +24,8 @@ async def get_stars_for_mythology_update():
 
         result = await session.execute(
             select(Star.name).where(
-                (Star.last_mythology_update.is_(None)) | (Star.last_mythology_update < one_year_ago)
+                (Star.last_mythology_update.is_(None))
+                | (Star.last_mythology_update < one_year_ago)
             )
         )
         stars_to_update = result.scalars().all()
@@ -41,11 +42,13 @@ async def update_star_mythology(star_name: str):
         star_record = await session.get(Star, star_name)
 
         if not star_record:
-            logger.warning(f"Star {star_name} not found in the database, skipping update")
+            logger.warning(
+                f"Star {star_name} not found in the database, skipping update"
+            )
             return
 
         # Generate new mythology
-        mythology_data = await analyze_star_mythology(star_name)
+        mythology_data = await analyze_star_mythology(star_name, star_record.__dict__)
 
         if not mythology_data:
             logger.warning(f"Mythology data for {star_name} could not be retrieved")
@@ -55,12 +58,17 @@ async def update_star_mythology(star_name: str):
         await session.execute(
             update(Star)
             .where(Star.name == star_name)
-            .values(mythology=mythology_data, last_mythology_update=datetime.now(timezone.utc))
+            .values(
+                mythology=mythology_data,
+                last_mythology_update=datetime.now(timezone.utc),
+            )
         )
         await session.commit()
 
         # Cache mythology for 1 year
-        await redis_client.setex(f"mythology:{star_name}", MYTHOLOGY_CACHE_TTL, mythology_data)
+        await redis_client.setex(
+            f"mythology:{star_name}", MYTHOLOGY_CACHE_TTL, mythology_data
+        )
 
         logger.info(f"Mythology for {star_name} updated successfully")
 

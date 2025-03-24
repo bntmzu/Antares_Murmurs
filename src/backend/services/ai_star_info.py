@@ -7,6 +7,7 @@ from src.backend.services.redis_client import redis_client
 openai.api_key = settings.OPENAI_API_KEY
 logger = logging.getLogger(__name__)
 
+
 async def analyze_star_mythology(star_name: str, star_data: dict):
     """
     Uses GPT-4 to analyze the mythology of a star.
@@ -60,12 +61,11 @@ async def analyze_star_mythology(star_name: str, star_data: dict):
         temperature=0.6,
         top_p=0.9,
         frequency_penalty=0.2,
-        presence_penalty=0.3
+        presence_penalty=0.3,
     )
 
     mythology_description = response.choices[0].message.content.strip()
     mythology_description = mythology_description.replace("\n-", "").strip()
-
 
     def format_mythology_response(mythology_text: str):
         sections = mythology_text.split("**")
@@ -85,7 +85,11 @@ async def analyze_star_mythology(star_name: str, star_data: dict):
     formatted_mythology = format_mythology_response(mythology_description)
 
     # Cache the response for 1 year (365 days)
-    await redis_client.set(cache_key, json.dumps({**star_data, "mythology": formatted_mythology}), expire=31536000)
+    await redis_client.set(
+        cache_key,
+        json.dumps({**star_data, "mythology": formatted_mythology}),
+        expire=31536000,
+    )
 
     logger.info(f" Mythology for {star_name} cached for 1 year")
 
